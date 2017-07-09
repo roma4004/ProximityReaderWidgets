@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui widgets serialport
+QT       += core gui widgets serialport sql
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -30,4 +30,5 @@ SOURCES += \
 
 HEADERS += \
     dialog.h \
-    masterthread.h
+    masterthread.h \
+    dbconn.h

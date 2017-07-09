@@ -103,7 +103,7 @@ void MasterThread::run()
             serial.setPortName(currentPortName);
 
             if (!serial.open(QIODevice::ReadWrite)) {
-                emit error(tr("Can't open %1, error code %2")
+                emit error(tr("Не удалось открыть %1, код ошибки %2")
                            .arg(portName).arg(serial.error()));
                 return;
             }
@@ -121,14 +121,23 @@ void MasterThread::run()
                 this->lastResponse = response;
                 emit this->response(response);
             } else
-                emit timeout(tr("Wait read response timeout %1")
+                emit timeout(tr("Вышло время ожидания ответа %1")
                              .arg(QTime::currentTime().toString()));
 
         } else
-            emit timeout(tr("Wait write request timeout %1")
+            emit timeout(tr("Вышло время ожидания отправки %1")
                          .arg(QTime::currentTime().toString()));
         mutex.lock();
-        cond.wait(&mutex);
+        if(this->request == "55 66 00 4a 70") {
+            sleep(1);
+            // 08 = frameSize, without service data
+            //if (responsePart.contains(deviceAddress + " " + comandCode + " 08") )
+            if(this->lastResponse == "55 66 08 01 32 41 a0 00 39 00 ac 1f 3f"){
+                currentWaitTimeout = waitTimeout;
+            }
+        } else {
+            cond.wait(&mutex);
+        }
         if (currentPortName != portName) {
             currentPortName = portName;
             currentPortNameChanged = true;
@@ -139,3 +148,5 @@ void MasterThread::run()
         mutex.unlock();
     }
 }
+
+

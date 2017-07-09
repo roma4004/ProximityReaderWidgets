@@ -63,6 +63,10 @@ class QSpinBox;
 class QPushButton;
 class QComboBox;
 
+class QDialogButtonBox;
+class QPushButton;
+class QSqlTableModel;
+
 QT_END_NAMESPACE
 
 class Dialog : public QDialog
@@ -72,12 +76,16 @@ class Dialog : public QDialog
 public:
     explicit Dialog(QWidget *parent = nullptr);
 
-private slots:
-    void transaction();
+private slots:    
     void showResponse  (const QString &s);
     void processError  (const QString &s);
     void processTimeout(const QString &s);
-    void pingCommand();
+    void     sendCommand();
+    bool     pingCommand(QString portName);
+    void     pingCommandAllPort();
+    void readCardCommand();
+    void  addCardCommand();
+    void submit();
 
 private:
     void setControlsEnabled(bool enable);
@@ -85,8 +93,6 @@ private:
 
 private:    
     int transactionCount;
-
-
 
     QLabel      *serialPortLabel;
     QComboBox   *serialPortComboBox;
@@ -98,7 +104,14 @@ private:
     QLabel      *statusLabel;
     QPushButton *runButton;
     QPushButton *pingButton;
+    QPushButton *readCardButton;
+    QPushButton *addCardButton;
     QLabel      *portInfoLabel;
+
+    QPushButton *submitButton;
+    QPushButton *revertButton;
+    QDialogButtonBox *buttonBox;
+    QSqlTableModel *model;
 
     MasterThread thread;
 };
