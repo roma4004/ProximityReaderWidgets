@@ -26,9 +26,11 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         main.cpp \
     dialog.cpp \
-    masterthread.cpp
+    masterthread.cpp \
+    serialport.cpp
 
 HEADERS += \
     dialog.h \
     masterthread.h \
-    dbconn.h
+    dbconn.h \
+    serialport.h

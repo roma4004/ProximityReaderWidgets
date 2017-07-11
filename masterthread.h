@@ -54,7 +54,7 @@
 #include <QThread>
 #include <QMutex>
 #include <QWaitCondition>
-
+//deprecated class, new class is SerialPort
 class MasterThread : public QThread
 {
     Q_OBJECT
@@ -63,17 +63,28 @@ public:
     explicit MasterThread(QObject *parent = nullptr);
     ~MasterThread();
 
-    QString lastResponse;
+    QString lastResponseFull;
 
     void transaction(const QString &portName, int waitTimeout,
                      const QString &request);
     void run() Q_DECL_OVERRIDE;
 
+    struct lastResponseStruct
+    {
+        QString devAddress;
+        QString comandCode;
+        QString frameSize;
+        QString responseText;
+        QString CRC;
+    } lastResponse;
+
 signals:
-    void response   (const QString &s);
-    void error      (const QString &s);
-    void timeout    (const QString &s);
-    void portChanged(const QString &newPort);
+    void response      (const QString &s);
+    void error         (const QString &s);
+    void timeout       (int msgCode);
+    void portChanged   (const QString &newPort);
+    void setRequestTxt (const QString &req);
+    void setResponseTxt(const QString &res);
 
 private:    
     QString portName;

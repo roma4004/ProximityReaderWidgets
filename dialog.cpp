@@ -59,6 +59,7 @@
 #include <QtSql>
 #include <QtSerialPort/QSerialPortInfo>
 #include <QtWidgets>
+#include <QTime>
 
 QT_USE_NAMESPACE
 
@@ -72,6 +73,8 @@ Dialog::Dialog(QWidget *parent)
     , requestLabel       (new QLabel     (tr("Запрос:"                   )))
     , requestLineEdit    (new QLineEdit  (tr("Введите запрос"            )))
     , trafficLabel       (new QLabel     (tr("Нет передачи"              )))
+    , requestEdit        (new QLineEdit  (tr("Текст запрос: "            )))
+    , responseEdit       (new QLineEdit  (tr("Текст ответа: "            )))
     , statusLabel        (new QLabel     (tr("Статус: не запущен."       )))
     , runButton          (new QPushButton(tr("Отправить"                 )))
     , pingButton         (new QPushButton(tr("  Найти считыватель  "     )))
@@ -84,7 +87,7 @@ Dialog::Dialog(QWidget *parent)
         serialPortComboBox->addItem(info.portName() );
     displayPortInfo(serialPortComboBox->currentText() );
     waitResponseSpinBox->setRange(0, 10000);
-    waitResponseSpinBox->setValue(1000);
+    waitResponseSpinBox->setValue(3000);
 
     model = new QSqlTableModel(this);
     model->setTable("proximityCards");
@@ -116,15 +119,17 @@ Dialog::Dialog(QWidget *parent)
     mainLayout->addWidget(requestLabel,        2, 0      );
     mainLayout->addWidget(requestLineEdit,     2, 1, 1, 3);
 
-    mainLayout->addWidget(trafficLabel,        3, 0, 1, 4);
+    mainLayout->addWidget(trafficLabel,        3, 0, 1, 5);
+    mainLayout->addWidget(requestEdit,         4, 0, 1, 5);
+    mainLayout->addWidget(responseEdit,        5, 0, 1, 5);
 
-    mainLayout->addWidget(statusLabel,         4, 0, 1, 5);
+    mainLayout->addWidget(statusLabel,         6, 0, 1, 5);
 
-    mainLayout->addWidget(portInfoLabel,       5, 0, 1, 5);
+    mainLayout->addWidget(portInfoLabel,       7, 0, 1, 5);
 
-    mainLayout->addWidget(view,                6, 0, 1, 4);
-  //mainLayout->addWidget(buttonBox,           6, 4, 1, 1);
-    addCardButton->setEnabled(false);
+    mainLayout->addWidget(view,                8, 0, 1, 4);
+  //mainLayout->addWidget(buttonBox,           9, 4, 1, 1);
+  //addCardButton->setEnabled(false);
     setLayout(mainLayout);
 
     setWindowTitle(tr("Proximity reader"));
@@ -140,6 +145,10 @@ Dialog::Dialog(QWidget *parent)
     connect(           &thread, &MasterThread::error             ,  this, &Dialog::processError      );
     connect(           &thread, &MasterThread::timeout           ,  this, &Dialog::processTimeout    );
     connect(           &thread, &MasterThread::portChanged       ,  this, &Dialog::displayPortInfo   );
+
+    connect(           &thread, &MasterThread::setRequestTxt     ,   requestEdit, &QLineEdit::setText);
+    connect(           &thread, &MasterThread::setResponseTxt    ,  responseEdit, &QLineEdit::setText);
+
     connect(serialPortComboBox,    &QComboBox::currentTextChanged,  this, &Dialog::displayPortInfo   );
 }
 
@@ -161,7 +170,7 @@ void Dialog::showResponse(const QString &s)
                              "\n\r-Получено: %3")
                           .arg(++transactionCount)
                           .arg(requestLineEdit->text() )
-                          .arg(s));
+                          .arg(s) );
 }
 
 void Dialog::processError(const QString &s)
@@ -171,10 +180,19 @@ void Dialog::processError(const QString &s)
     trafficLabel->setText(tr("Нет передачи.") );
 }
 
-void Dialog::processTimeout(const QString &s)
+void Dialog::processTimeout(int msgCode)
 {
+    QString str;
+    switch(msgCode){
+        case 1: str = tr("Вышло время на ответа %1")
+                      .arg(QTime::currentTime().toString());
+        break;
+        case 2: str = tr("Вышло время на отправки %1")
+                      .arg(QTime::currentTime().toString());
+        break;
+    }
     setControlsEnabled(true);
-    statusLabel->setText(tr("Статус: время вышло, %1").arg(s) );
+    statusLabel->setText(tr("Статус: %1").arg(str) );
     trafficLabel->setText(tr("Нет передачи.") );
 }
 
@@ -189,11 +207,11 @@ void Dialog::setControlsEnabled(bool enable)
 }
 void Dialog::displayPortInfo(QString portName)
 {
-    addCardButton->setEnabled(false);
+    //addCardButton->setEnabled(false);
 
     const auto infos = QSerialPortInfo::availablePorts();
     for (const QSerialPortInfo &info : infos) {
-        if (info.portName() == portName){
+        if (info.portName() == portName){             //if found select port to show only his description
             QString s = QObject::tr("О устройстве: ")   + "\n"
                       + QObject::tr("Номер порта: ")    + info.portName() + "\n"
                       + QObject::tr("Расположение: ")   + info.systemLocation() + "\n"
@@ -219,53 +237,69 @@ void Dialog::displayPortInfo(QString portName)
 }
 bool Dialog::pingCommand(QString portName)
 {
+     requestEdit->setText(tr(PING_REQ) );
+    responseEdit->setText(tr("") );
     thread.transaction(portName,
-                       waitResponseSpinBox->value(),
-                       "55 64 09 50 52 2d 30 31 20 55 53 42 c9 11");
+                       waitResponseSpinBox->value(),                       
+                       PING_REQ);
     //Maybe here need sleep() to get enough time to receive response
-    if (thread.lastResponse == "55 65 00 4a 80"){
-        addCardButton->setEnabled(true);
-        return true;
-    }
+    //if (thread.lastResponse == "55 65 00 4a 80"){
+    //        addCardButton->setEnabled(true);
+    //    return true;
+    //}
     return false;
 }
 
-//todo: all requests must be run in thread
 void Dialog::pingCommandAllPort()
-{  //work only if device address = 85 (0x55)
+{
     setControlsEnabled(false);  //disable controls while doing transaction
 
-    const auto infos = QSerialPortInfo::availablePorts();
+    const auto infos = QSerialPortInfo::availablePorts(); //get available serial ports
     unsigned short int portCnt = 0;
 
-    for (const QSerialPortInfo &info : infos) {
+    for (const QSerialPortInfo &info : infos) {        //ping each port to find device
         statusLabel->setText(tr("Статус: поиск считывателя на %1")
                              .arg(info.portName() ) );
-        if(pingCommand(info.portName() ) ) return;
+        if(pingCommand(info.portName() ) ) {       //if find select this port in combobox
+            serialPortComboBox->setCurrentIndex(portCnt);
+            return;
+        }
         portCnt++;
     }
 }
 
 void Dialog::readCardCommand()
-{//work only if device address = 85 (0x55)
+{
     setControlsEnabled(false);  //disable controls while doing transaction
     statusLabel->setText(tr("Статус: попытка считывания карты на %1")
                          .arg(serialPortComboBox->currentText() ) );
 
     thread.transaction(serialPortComboBox->currentText(),
                        waitResponseSpinBox->value(),
-                       "55 66 00 4a 70");
+                       GET_KEY_REQ);
 }
 void Dialog::addCardCommand()
 {
+    readCardCommand();
+    int cardNum = 0;
+    cardNum = thread.lastResponse.responseText.toInt();
     QSqlQuery query;
-    query.exec("INSERT INTO proximityCards VALUES("
-               "NULL, "
-               "5476574567, "
-               "datetime('now'), "
-               "'teыыыыыыst name')");
+    //query.exec("INSERT INTO proximityCards VALUES("
+    //           "NULL, "
+    //           "5476574567, "
+    //           "datetime('now'), "
+    //           "'test name')");
+
+    query.prepare("INSERT INTO proximityCards (card_number, creation_date, name) "
+                  "VALUES (?, ?, ?)");
+    query.addBindValue(cardNum);
+    query.addBindValue(QTime::currentTime().toString());
+    query.addBindValue("Example Name");
+
+    query.exec();
     model->revertAll();
     submit();
+    //need send RESET_KEY_REQ to device
 }
 
 void Dialog::submit()

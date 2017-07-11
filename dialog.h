@@ -76,10 +76,13 @@ class Dialog : public QDialog
 public:
     explicit Dialog(QWidget *parent = nullptr);
 
-private slots:    
     void showResponse  (const QString &s);
     void processError  (const QString &s);
-    void processTimeout(const QString &s);
+    void processTimeout(int msgCode);
+
+
+private slots:    
+
     void     sendCommand();
     bool     pingCommand(QString portName);
     void     pingCommandAllPort();
@@ -101,7 +104,9 @@ private:
     QLabel      *requestLabel;
     QLineEdit   *requestLineEdit;
     QLabel      *trafficLabel;
-    QLabel      *statusLabel;
+    QLineEdit   *requestEdit;
+    QLineEdit   *responseEdit;
+    QLabel      *statusLabel;    
     QPushButton *runButton;
     QPushButton *pingButton;
     QPushButton *readCardButton;
@@ -114,6 +119,24 @@ private:
     QSqlTableModel *model;
 
     MasterThread thread;
+
+    const char          PING_REQ[14] = {(char)(0x55), (char)(0x64), (char)(0x09),   //service data
+                                        (char)(0x50), (char)(0x52), (char)(0x2d),   //message part
+                                        (char)(0x30), (char)(0x31), (char)(0x20),   //=^^^^^^^^^^=
+                                        (char)(0x55), (char)(0x53), (char)(0x42),   //=^^^^^^^^^^=
+                                        (char)(0xc9), (char)(0x11)               }; //CRC16
+    const char           PING_RES[5] = {(char)(0x55), (char)(0x64), (char)(0x00),   //service data
+                                        (char)(0x4b), (char)(0x10)               }; //CRC16
+    const char      RESET_KEY_REQ[5] = {(char)(0x55), (char)(0x65), (char)(0x00),   //service data
+                                        (char)(0x4a), (char)(0x80)               }; //CRC16
+    const char      RESET_KEY_RES[5] = {(char)(0x55), (char)(0x65), (char)(0x00),   //service data
+                                        (char)(0x4a), (char)(0x80)               }; //CRC16
+    const char        GET_KEY_REQ[5] = {(char)(0x55), (char)(0x66), (char)(0x00),   //service data
+                                        (char)(0x4a), (char)(0x70)               }; //CRC16
+    const char GET_KEY_RES_NOTKEY[5] = {(char)(0x55), (char)(0x66), (char)(0x00),   //service data
+                                        (char)(0x4a), (char)(0x70)               }; //CRC16
+    const char GET_KEY_RES_YESKEY[5] = {(char)(0x55), (char)(0x66), (char)(0x08) }; //service data, use only in check if request .contein(GET_KEY_REQ_YESKEY)
+
 };
 
 #endif // DIALOG_H

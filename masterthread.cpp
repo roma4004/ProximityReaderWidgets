@@ -53,7 +53,7 @@
 #include <QTime>
 
 QT_USE_NAMESPACE
-
+//deprecated class, new class is SerialPort
 MasterThread::MasterThread(QObject *parent)
     : QThread(parent), waitTimeout(0), quit(false)
 {
@@ -76,6 +76,7 @@ void MasterThread::transaction(const QString &portName, int waitTimeout,
     this->portName    = portName;
     this->waitTimeout = waitTimeout;
     this->request     = request;
+    emit setRequestTxt(request);
 
     if (!isRunning()) start();
     else cond.wakeOne();
@@ -92,7 +93,7 @@ void MasterThread::run()
         currentPortNameChanged = true;
     }
 
-    int currentWaitTimeout = waitTimeout;
+    unsigned int currentWaitTimeout = waitTimeout;
     QString currentRequest = request;
     mutex.unlock();
     QSerialPort serial;
@@ -101,7 +102,7 @@ void MasterThread::run()
         if (currentPortNameChanged) {
             serial.close();
             serial.setPortName(currentPortName);
-
+            serial.setBaudRate(19200);
             if (!serial.open(QIODevice::ReadWrite)) {
                 emit error(tr("Не удалось открыть %1, код ошибки %2")
                            .arg(portName).arg(serial.error()));
@@ -109,35 +110,30 @@ void MasterThread::run()
             }
         }
 
-        QByteArray requestData = currentRequest.toLocal8Bit();
-        serial.write(requestData);                              // write request
-        if (serial.waitForBytesWritten(waitTimeout)) {          // read response
+         QByteArray currentRequestBA = currentRequest.toLocal8Bit();  //convert from QString to QByteArray
+         QByteArray currentRequestHex = currentRequestBA.toHex();    //convert QByteArray to Hex QByteArray
+        // QByteArray requestData = currentRequest.toLocal8Bit();
+
+
+        serial.write(currentRequestHex);                          // write request
+        if (serial.waitForBytesWritten(waitTimeout)) {
             if (serial.waitForReadyRead(currentWaitTimeout)) {
-                QByteArray responseData = serial.readAll();
+                QByteArray responseData = serial.readAll();       // read response
                 while (serial.waitForReadyRead(10))
                     responseData += serial.readAll();
 
-                QString response(responseData);
-                this->lastResponse = response;
-                emit this->response(response);
-            } else
-                emit timeout(tr("Вышло время ожидания ответа %1")
-                             .arg(QTime::currentTime().toString()));
+                //QString response(responseData);
+                QByteArray responseHex = QByteArray::fromHex(responseData);  //convert from raw QByteArray to hex QByteArray
+                QString response(responseHex.toHex(' ') );                   //assign space between Byte to hex view
 
-        } else
-            emit timeout(tr("Вышло время ожидания отправки %1")
-                         .arg(QTime::currentTime().toString()));
+                this->lastResponseFull = response; //need slice response for lastResponseStruct
+                emit setResponseTxt(response);
+                emit this->response(response);
+
+            } else emit timeout(1); //code 1 = recieve timeout
+        } else     emit timeout(2); //code 2 = send    timeout
         mutex.lock();
-        if(this->request == "55 66 00 4a 70") {
-            sleep(1);
-            // 08 = frameSize, without service data
-            //if (responsePart.contains(deviceAddress + " " + comandCode + " 08") )
-            if(this->lastResponse == "55 66 08 01 32 41 a0 00 39 00 ac 1f 3f"){
-                currentWaitTimeout = waitTimeout;
-            }
-        } else {
-            cond.wait(&mutex);
-        }
+        cond.wait(&mutex);
         if (currentPortName != portName) {
             currentPortName = portName;
             currentPortNameChanged = true;
